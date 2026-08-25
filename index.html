@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<title>اسکرول کن لعنتی</title>
+
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: Tahoma, sans-serif;
+}
+
+/* صفحه اصلی */
+#reels {
+    width: 100%;
+    height: 100dvh;
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+
+    scrollbar-width: none;
+}
+
+#reels::-webkit-scrollbar {
+    display: none;
+}
+
+/* هر رسانه */
+.media-item {
+    width: 100%;
+    height: 100dvh;
+
+    position: relative;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: #000;
+
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+
+    overflow: hidden;
+}
+
+/* عکس و فیلم */
+.media-item img,
+.media-item video {
+    width: 100%;
+    height: 100%;
+
+    object-fit: contain;
+
+    display: block;
+
+    background: #000;
+}
+
+/* دکمه دانلود */
+.download-btn,
+.sound-btn {
+    position: absolute;
+
+    bottom: 25px;
+
+    width: 48px;
+    height: 48px;
+
+    border-radius: 50%;
+
+    border: 1px solid rgba(255,255,255,0.3);
+
+    background: rgba(0,0,0,0.55);
+
+    color: white;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    text-decoration: none;
+
+    font-size: 22px;
+
+    backdrop-filter: blur(8px);
+
+    z-index: 10;
+
+    transition: 0.2s;
+
+    cursor: pointer;
+
+    -webkit-tap-highlight-color: transparent;
+}
+
+
+/* دکمه دانلود سمت راست */
+.download-btn {
+    right: 20px;
+}
+
+
+/* دکمه صدا سمت چپ */
+.sound-btn {
+    left: 20px;
+}
+
+
+/* افکت هنگام لمس یا رفتن موس */
+.download-btn:hover,
+.sound-btn:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+
+/* جلوگیری از تغییر مکان دکمه */
+.download-btn:active,
+.sound-btn:active {
+    transform: scale(0.95);
+}
+
+.download-btn:hover {
+    background: rgba(255,255,255,0.2);
+    transform: scale(1.05);
+}
+
+/* شماره رسانه */
+.counter {
+    position: absolute;
+
+    top: 18px;
+    left: 18px;
+
+    padding: 7px 12px;
+
+    border-radius: 20px;
+
+    background: rgba(0,0,0,0.45);
+
+    color: rgba(255,255,255,0.8);
+
+    font-size: 12px;
+
+    z-index: 10;
+
+    backdrop-filter: blur(6px);
+}
+
+/* حالت بارگذاری */
+#loading {
+    position: fixed;
+
+    inset: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: #000;
+
+    color: white;
+
+    font-size: 18px;
+
+    z-index: 100;
+}
+
+/* پیام نبودن فایل */
+#empty {
+    position: fixed;
+
+    inset: 0;
+
+    display: none;
+
+    align-items: center;
+    justify-content: center;
+
+    text-align: center;
+
+    background: #000;
+
+    color: white;
+
+    padding: 30px;
+
+    z-index: 200;
+}
+</style>
+</head>
+
+<body>
+
+<div id="loading">
+    در حال کنده کاری برای بارگذاری...
+</div>
+
+<div id="reels"></div>
+
+<div id="empty">
+    هیچ ک..شعری برای نمایش بهت وجود نداره.
+</div>
+
+<script src="media.js"></script>
+
+<script>
+
+const reels = document.getElementById("reels");
+const loading = document.getElementById("loading");
+const empty = document.getElementById("empty");
+
+/*
+    کلید ذخیره وضعیت دیده شدن
+*/
+const SEEN_KEY = "simple_reels_seen_v1";
+
+
+/*
+    دریافت لیست دیده شده ها
+*/
+function getSeen() {
+
+    try {
+
+        const data = localStorage.getItem(SEEN_KEY);
+
+        if (!data) {
+            return [];
+        }
+
+        return JSON.parse(data);
+
+    } catch (error) {
+
+        console.error(error);
+
+        return [];
+    }
+}
+
+
+/*
+    ذخیره دیده شدن
+*/
+function saveSeen(seen) {
+
+    localStorage.setItem(
+        SEEN_KEY,
+        JSON.stringify(seen)
+    );
+}
+
+
+/*
+    ثبت یک رسانه به عنوان دیده شده
+*/
+function markAsSeen(id) {
+
+    const seen = getSeen();
+
+    if (!seen.includes(id)) {
+
+        seen.push(id);
+
+        saveSeen(seen);
+    }
+}
+
+
+/*
+    ساخت کپی از لیست
+*/
+function shuffle(array) {
+
+    const result = [...array];
+
+    for (
+        let i = result.length - 1;
+        i > 0;
+        i--
+    ) {
+
+        const j =
+            Math.floor(Math.random() * (i + 1));
+
+        [
+            result[i],
+            result[j]
+        ] =
+        [
+            result[j],
+            result[i]
+        ];
+    }
+
+    return result;
+}
+
+
+/*
+    آماده کردن ترتیب نمایش
+*/
+function createFeed() {
+
+    const seen = getSeen();
+
+    const unseen =
+        mediaList.filter(
+            item => !seen.includes(item.id)
+        );
+
+    /*
+        اگر هنوز رسانه دیده نشده داریم،
+        اول آنها نمایش داده می شوند.
+    */
+    if (unseen.length > 0) {
+
+        return [
+            ...shuffle(unseen),
+            ...shuffle(
+                mediaList.filter(
+                    item => seen.includes(item.id)
+                )
+            )
+        ];
+
+    }
+
+    /*
+        اگر همه قبلاً دیده شده اند،
+        همه کاملاً تصادفی نمایش داده می شوند.
+    */
+    return shuffle(mediaList);
+}
+
+
+/*
+    ساخت یک رسانه
+*/
+function createMedia(item, index, total) {
+
+    const container =
+        document.createElement("div");
+
+    container.className = "media-item";
+
+    container.dataset.id = item.id;
+
+
+
+    /*
+        ساخت عکس
+    */
+    if (item.type === "image") {
+
+        const img =
+            document.createElement("img");
+
+        img.src = item.src;
+
+        img.alt = "";
+
+        img.loading = "lazy";
+
+        container.appendChild(img);
+    }
+
+
+    /*
+        ساخت ویدئو
+    */
+if (item.type === "video") {
+
+    const video =
+        document.createElement("video");
+
+    video.src = item.src;
+
+    video.playsInline = true;
+
+    video.preload = "metadata";
+
+    video.controls = false;
+
+    /*
+        شروع بدون صدا
+        چون مرورگر اجازه پخش خودکار
+        با صدا را معمولاً نمی دهد.
+    */
+    video.muted = true;
+
+    video.loop = false;
+
+
+    /*
+        دکمه صدا
+    */
+    const soundBtn =
+        document.createElement("button");
+
+    soundBtn.className = "sound-btn";
+
+    soundBtn.type = "button";
+
+    soundBtn.innerHTML = "🔇";
+
+    soundBtn.title = "صداشو وا کن";
+
+
+    /*
+        کلیک روی دکمه صدا
+    */
+    soundBtn.addEventListener(
+        "click",
+        event => {
+
+            /*
+                جلوگیری از تغییر اسکرول
+            */
+            event.preventDefault();
+
+            event.stopPropagation();
+
+
+            /*
+                روشن / خاموش کردن صدا
+            */
+            video.muted = !video.muted;
+
+
+            /*
+                تغییر علامت دکمه
+            */
+            if (video.muted) {
+
+                soundBtn.innerHTML = "🔇";
+
+                soundBtn.title =
+                    "اگه میخوای صدای نالَش بیاد بزن";
+
+            } else {
+
+                soundBtn.innerHTML = "🔊";
+
+                soundBtn.title =
+                    "اگه میخوای صدا خفه شه بزن";
+
+            }
+
+
+            /*
+                اگر ویدئو متوقف شده بود،
+                دوباره پخش شود.
+            */
+            if (video.paused) {
+
+                const promise =
+                    video.play();
+
+                if (
+                    promise &&
+                    promise.catch
+                ) {
+
+                    promise.catch(
+                        () => {}
+                    );
+                }
+            }
+
+        }
+    );
+
+
+    /*
+        اضافه کردن ویدئو
+    */
+    container.appendChild(video);
+
+
+    /*
+        اضافه کردن دکمه صدا
+    */
+    container.appendChild(soundBtn);
+}
+
+
+    /*
+        دکمه دانلود
+    */
+    const download =
+        document.createElement("a");
+
+    download.className = "download-btn";
+
+    download.href = item.src;
+
+    download.download = "";
+
+    download.title = "سیخ و سنگ";
+
+    download.innerHTML = "⬇";
+
+    /*
+        جلوگیری از اینکه کلیک روی دانلود
+        باعث جابه‌جایی اسکرول شود.
+    */
+    download.addEventListener(
+        "click",
+        event => {
+
+            event.stopPropagation();
+
+        }
+    );
+
+    container.appendChild(download);
+
+
+    return container;
+}
+
+
+/*
+    ساخت Feed
+*/
+function buildFeed() {
+
+    reels.innerHTML = "";
+
+    const feed = createFeed();
+
+    if (feed.length === 0) {
+
+        loading.style.display = "none";
+
+        empty.style.display = "flex";
+
+        return;
+    }
+
+
+    feed.forEach(
+        (item, index) => {
+
+            const element =
+                createMedia(
+                    item,
+                    index,
+                    feed.length
+                );
+
+            reels.appendChild(element);
+        }
+    );
+
+
+    loading.style.display = "none";
+
+    setupObserver();
+}
+
+
+/*
+    کنترل پخش و دیده شدن
+*/
+function setupObserver() {
+
+    const items =
+        document.querySelectorAll(".media-item");
+
+
+    const observer =
+        new IntersectionObserver(
+
+            entries => {
+
+                entries.forEach(entry => {
+
+                    const element =
+                        entry.target;
+
+                    const video =
+                        element.querySelector("video");
+
+
+                    /*
+                        وقتی حداقل 70 درصد رسانه
+                        داخل صفحه است
+                    */
+                    if (
+                        entry.isIntersecting &&
+                        entry.intersectionRatio >= 0.7
+                    ) {
+
+                        /*
+                            ثبت به عنوان دیده شده
+                        */
+                        markAsSeen(
+                            element.dataset.id
+                        );
+
+
+                        /*
+                            اگر ویدئو است،
+                            پخش شود.
+                        */
+if (video) {
+
+    /*
+        تمام ویدئوهای دیگر متوقف شوند
+    */
+    document
+        .querySelectorAll("video")
+        .forEach(
+            other => {
+
+                if (
+                    other !== video
+                ) {
+
+                    other.pause();
+
+                    other.currentTime = 0;
+
+                    /*
+                        ویدئوهای قبلی دوباره
+                        بی صدا شوند.
+                    */
+                    other.muted = true;
+                }
+
+            }
+        );
+
+
+    /*
+        ویدئوی جدید ابتدا بدون صدا
+        خودکار پخش می شود.
+    */
+    video.muted = true;
+
+
+    /*
+        دکمه صدا را نیز به حالت خاموش برگردان.
+    */
+    const soundBtn =
+        element.querySelector(".sound-btn");
+
+    if (soundBtn) {
+
+        soundBtn.innerHTML = "🔇";
+
+        soundBtn.title =
+            "فعال کردن صدا";
+    }
+
+
+    /*
+        پخش خودکار
+    */
+    const promise =
+        video.play();
+
+    if (
+        promise &&
+        promise.catch
+    ) {
+
+        promise.catch(
+            () => {}
+        );
+    }
+
+}
+
+                    } else {
+
+                        /*
+                            اگر از صفحه خارج شد
+                            ویدئو متوقف شود.
+                        */
+                        if (video) {
+
+                            video.pause();
+
+                        }
+
+                    }
+
+                });
+
+            },
+
+            {
+                threshold: [0.7]
+            }
+
+        );
+
+
+    items.forEach(
+        item => observer.observe(item)
+    );
+}
+
+
+/*
+    شروع برنامه
+*/
+buildFeed();
+
+</script>
+
+</body>
+</html>
